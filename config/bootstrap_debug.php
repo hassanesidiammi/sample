@@ -5,6 +5,10 @@
  * @author Hassane SIDI AMMI <h.sidiammi@gmail.com>
  */
 
+
+const H_DEBUG_LEVEL = 4;
+global $baseDire;
+
 error_reporting(-1);
 
 set_error_handler(function ($severity, $message, $file, $line) {
@@ -15,8 +19,8 @@ set_error_handler(function ($severity, $message, $file, $line) {
     throw new Exception($message, 0, null);
 });
 
-global $baseDire;
 $baseDire = explode('/',str_replace('\\', '/', __DIR__));
+array_pop($baseDire);
 array_pop($baseDire);
 $baseDire = implode('/', $baseDire);
 
@@ -43,7 +47,7 @@ function dr($data) {
     _dump($data, 'print_r');
 }
 
-function _dump($data, $dumper='var_dump') {
+function _dump($data, $dumper='dump_debug') {
     static $i = 0;
     $i++;
     global $baseDire;
@@ -53,7 +57,7 @@ function _dump($data, $dumper='var_dump') {
 
     echo '<pre style="position: relative; margin: 10px auto; padding: 32px 10px 10px 10px; font-size: 14px; background: '.($i % 2?'#ffefef;':'#ffffef;').'")>';
     echo '<b style="position: absolute; top: 5px; right: 5px;">';
-    print_trace(substr($traces[0]['file'], $baseLenth), $traces[0]['line'], 18);
+    print_trace(substr($traces[0]['file'], $baseLenth), $traces[0]['line'], 14);
     echo '</b>';
     if (is_string($data)) echo '<div style="white-space: normal">';
     call_user_func($dumper, $data);
@@ -145,88 +149,147 @@ function dump_debug($input, $collapse=false) {
         }
 
         $type = !is_string($data) && is_callable($data) ? "Callable" : ucfirst(gettype($data));
-        if ('Object' == $type) {
-            try {
-                $type .=' `'.get_class($data).'` ';
-            } catch (\Exception $exception){
 
-            }
-        }else {
-        }
-        $type_data = null;
-        $type_color = null;
-        $type_length = null;
+        $typeData = null;
+        $typeColor = null;
+        $typeLength = null;
 
         switch ($type) {
-            case "String":
-                $type_color = "green";
-                $type_length = strlen($data);
+            case 'String':
+                $typeColor = "green";
+                $typeLength = strlen($data);
                 $stringEntities = htmlentities($data);
-                if (empty($stringEntities) && $type_length) {
+                if (empty($stringEntities) && $typeLength) {
                     $stringEntities = utf8_encode($data);
                     $stringEntities = htmlentities($stringEntities);
                 }
-                $type_data = "\"" . $stringEntities . "\""; break;
+                $typeData = "\"" . $stringEntities . "\""; break;
 
-            case "Double": 
-            case "Float": 
+            case "Double":
+            case "Float":
                 $type = "Float";
-                $type_color = "#0099c5";
-                $type_length = strlen($data);
-                $type_data = htmlentities($data); break;
+                $typeColor = "#0099c5";
+                $typeLength = strlen($data);
+                $typeData = htmlentities($data); break;
 
-            case "Integer": 
-                $type_color = "red";
-                $type_length = strlen($data);
-                $type_data = htmlentities($data); break;
+            case "Integer":
+                $typeColor = "red";
+                $typeLength = strlen($data);
+                $typeData = htmlentities($data); break;
 
-            case "Boolean": 
-                $type_color = "#92008d";
-                $type_length = strlen($data);
-                $type_data = $data ? "TRUE" : "FALSE"; break;
+            case "Boolean":
+                $typeColor = "#92008d";
+                $typeLength = strlen($data);
+                $typeData = $data ? "TRUE" : "FALSE"; break;
 
-            case "NULL": 
-                $type_length = 0; break;
+            case "NULL":
+                $typeLength = 0; break;
 
-            case "Array": 
-                $type_length = count($data);
+            case "Array":
+                $typeLength = count($data);
+                break;
         }
 
-        if (in_array($type, array("Object", "Array"))) {
+        if ('Array' === $type) {
             $notEmpty = false;
 
             foreach($data as $key => $value) {
                 if (!$notEmpty) {
                     $notEmpty = true;
-
                     if ($isTerminal) {
-                        echo $type . ($type_length !== null ? "(" . $type_length . ")" : "")."\n";
-
+                        echo $type . ($typeLength !== null ? "(" . $typeLength . ")" : "")."\n";
                     } else {
                         $id = substr(md5(rand().":".$key.":".$level), 0, 8);
-
-                        echo "<a href=\"javascript:toggleDisplay('". $id ."');\" style=\"text-decoration:none\">";
-                        echo "<span style='color:#666666'>" . $type . ($type_length !== null ? "(" . $type_length . ")" : "") . "</span>";
-                        echo "</a>";
-                        echo "<span id=\"plus". $id ."\" style=\"display: " . ($collapse ? "inline" : "none") . ";\">&nbsp;&#10549;</span>";
-                        echo "<div id=\"container". $id ."\" style=\"display: " . ($collapse ? "" : "inline") . ";\">";
-                        echo "<br />";
+                        echo '<a href="javascript:toggleDisplay(\''. $id .'\');" style="text-decoration:none">'.
+                             '<span style="color:#666611">' . $type . ($typeLength !== null ? '(' . $typeLength . ')' : '') . '</span>'.
+                             '</a>'.
+                             '<span id="plus'. $id .'" style="display: ' . ($collapse ? 'inline' : 'none') . ';">&nbsp;&#10549;</span>'.
+                             '<div id="container'. $id .'" style="display: '. ($collapse ? '' : 'inline') . ';">';
+                        echo '<br>';
                     }
 
-                    for ($i=0; $i <= $level; $i++) {
-                        echo $isTerminal ? "|    " : "<span style='color:black'>|</span>&nbsp;&nbsp;&nbsp;&nbsp;";
-                    }
-
-                    echo $isTerminal ? "\n" : "<br />";
+                    echo str_repeat($isTerminal ? '|    ' : '<span style="color:black">|</span>&nbsp;&nbsp;&nbsp;&nbsp;',$level+1);
+                    echo $isTerminal ? '\n' : '<br>';
                 }
 
+                echo str_repeat($isTerminal ? '|    ' : '<span style="color:black">|</span>&nbsp;&nbsp;&nbsp;&nbsp;',$level+1);
+                echo $isTerminal ? '[' . $key . '] => ' : '<span style="color:black">['. $key .']&nbsp;=>&nbsp;</span>';
+
+
+                if($level > H_DEBUG_LEVEL){
+                    echo '...<br>';
+                } else {
+                    call_user_func($recursive, $value, $level+1);
+                }
+            }
+            if ($notEmpty) {
                 for ($i=0; $i <= $level; $i++) {
                     echo $isTerminal ? "|    " : "<span style='color:black'>|</span>&nbsp;&nbsp;&nbsp;&nbsp;";
                 }
 
-                echo $isTerminal ? "[" . $key . "] => " : "<span style='color:black'>[" . $key . "]&nbsp;=>&nbsp;</span>";
+                if (!$isTerminal) {
+                    echo "</div>";
+                }
 
-                call_user_func($recursive, $value, $level+1);
+            } else {
+                echo $isTerminal ?
+                    $type . ($typeLength !== null ? "(" . $typeLength . ")" : "") . "  " :
+                    "<span style='color:#666622'>" . $type . ($typeLength !== null ? "(" . $typeLength . ")" : "") . "</span>&nbsp;&nbsp;";
+            }
+
+        } elseif ('Object' == $type) {
+            $notEmpty = false;
+
+            $reflection = new ReflectionObject($data);
+            $properties = $reflection->getProperties();
+            $protected = $private = false;
+
+            foreach($properties as $property) {
+                /** @var ReflectionProperty $property */
+                $key = $property->getName();
+                try {
+                    if($property->isPrivate()){
+                        $private = true;
+                    }elseif($property->isProtected()){
+                        $protected = true;
+                    }
+                    $value = $property->setAccessible(true);
+                    $value = $property->getValue($data);
+                } catch (Exception $e) {
+                    die($e->getMessage());
+                }
+
+                if (!$notEmpty) {
+                    $notEmpty = true;
+                    if ($isTerminal) {
+                        echo $type . ($typeLength !== null ? "(" . $typeLength . ")" : "")."\n";
+                        echo str_repeat('|    ',$level+1);
+                        echo '\n';
+                    } else {
+                        $id = substr(md5(rand().":".$key.":".$level), 0, 8);
+                        echo '<a href="javascript:toggleDisplay(\''. $id .'\');" style="text-decoration:none">'.
+                            '<span style="color:#666611">' . $type ."({$property->class})" . ($typeLength !== null ? '(' . $typeLength . ')' : '') . '</span>'.
+                            '</a>'.
+                            '<span id="plus'. $id .'" style="display: ' . ($collapse ? 'inline' : 'none') . ';">&nbsp;&#10549;</span>'.
+                            '<div id="container'. $id .'" style="display: '. ($collapse ? '' : 'inline') . ';">';
+                        echo '<br>';
+                        echo str_repeat('<span style="color:black">|</span>&nbsp;&nbsp;&nbsp;&nbsp;',$level+1);
+                        echo '<br>';
+                    }
+
+
+                }
+
+                echo str_repeat($isTerminal ? '|    ' : '<span style="color:black">|</span>&nbsp;&nbsp;&nbsp;&nbsp;',$level+1);
+                $visibility = $private ? '- ' : ($protected ? '~ ' : '+ ');
+                echo $isTerminal ? $visibility.$key . ': ' : '<span style="color:black">'.$visibility.$key .': </span>';
+
+
+                if($level > H_DEBUG_LEVEL){
+                    echo '...<br>';
+                } else {
+                    call_user_func($recursive, $value, $level+1);
+                }
             }
 
             if ($notEmpty) {
@@ -239,18 +302,17 @@ function dump_debug($input, $collapse=false) {
                 }
 
             } else {
-                echo $isTerminal ? 
-                        $type . ($type_length !== null ? "(" . $type_length . ")" : "") . "  " : 
-                        "<span style='color:#666666'>" . $type . ($type_length !== null ? "(" . $type_length . ")" : "") . "</span>&nbsp;&nbsp;";
+                echo $isTerminal ?
+                    $type . ($typeLength !== null ? "(" . $typeLength . ")" : "") . "  " :
+                    "<span style='color:#666622'>" . $type . ($typeLength !== null ? "(" . $typeLength . ")" : "") . "</span>&nbsp;&nbsp;";
             }
 
         } else {
-            echo $isTerminal ? 
-                    $type . ($type_length !== null ? "(" . $type_length . ")" : "") . "  " : 
-                    "<span style='color:#666666'>" . $type . ($type_length !== null ? "(" . $type_length . ")" : "") . "</span>&nbsp;&nbsp;";
-
-            if ($type_data != null) {
-                echo $isTerminal ? $type_data : "<span style='color:" . $type_color . "'>" . $type_data . "</span>";
+            echo $isTerminal ?
+                $type . ($typeLength !== null ? "(" . $typeLength . ")" : "") . "  " :
+                "<span style='color:#666633'>" . $type . ($typeLength !== null ? "(" . $typeLength . ")" : "") . "</span>&nbsp;&nbsp;";
+            if ($typeData != null) {
+                echo $isTerminal ? $typeData : "<span style='color:" . $typeColor . "'> ". $typeData ."</span>";
             }
         }
 
@@ -259,3 +321,4 @@ function dump_debug($input, $collapse=false) {
 
     call_user_func($recursive, $input);
 }
+
