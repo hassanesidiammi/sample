@@ -7,21 +7,13 @@
 
 
 const H_DEBUG_LEVEL = 4;
+const H_DEBUG_METHODS_LEVEL = 1;
+
 global $baseDire;
-
-error_reporting(-1);
-
-set_error_handler(function ($severity, $message, $file, $line) {
-    if (!(error_reporting() & $severity)) {
-        return;
-    }
-    $message .= PHP_EOL.''.$file.':'.$line;
-    throw new Exception($message, 0, null);
-});
-
 $baseDire = explode('/',str_replace('\\', '/', __DIR__));
-array_pop($baseDire);
-array_pop($baseDire);
+# array_pop($baseDire);
+# array_pop($baseDire);
+
 $baseDire = implode('/', $baseDire);
 
 function dump($data) {
@@ -141,9 +133,9 @@ function dump_debug($input, $collapse=false) {
         if (!$isTerminal && $level == 0 && !defined("DUMP_DEBUG_SCRIPT")) {
             define("DUMP_DEBUG_SCRIPT", true);
 
-            echo '<script language="Javascript">function toggleDisplay(id) {';
+            echo '<script language="Javascript">function toggleDisplay(id, display=\'inline\') {';
             echo 'var state = document.getElementById("container"+id).style.display;';
-            echo 'document.getElementById("container"+id).style.display = state == "inline" ? "none" : "inline";';
+            echo 'document.getElementById("container"+id).style.display = state == display ? "none" : display;';
             echo 'document.getElementById("plus"+id).style.display = state == "inline" ? "inline" : "none";';
             echo '}</script>'."\n";
         }
@@ -201,10 +193,10 @@ function dump_debug($input, $collapse=false) {
                     } else {
                         $id = substr(md5(rand().":".$key.":".$level), 0, 8);
                         echo '<a href="javascript:toggleDisplay(\''. $id .'\');" style="text-decoration:none">'.
-                             '<span style="color:#666611">' . $type . ($typeLength !== null ? '(' . $typeLength . ')' : '') . '</span>'.
-                             '</a>'.
-                             '<span id="plus'. $id .'" style="display: ' . ($collapse ? 'inline' : 'none') . ';">&nbsp;&#10549;</span>'.
-                             '<div id="container'. $id .'" style="display: '. ($collapse ? '' : 'inline') . ';">';
+                            '<span style="color:#666611">' . $type . ($typeLength !== null ? '(' . $typeLength . ')' : '') . '</span>'.
+                            '</a>'.
+                            '<span id="plus'. $id .'" style="display: ' . ($collapse ? 'inline' : 'none') . ';">&nbsp;&#10549;</span>'.
+                            '<div id="container'. $id .'" style="display: '. ($collapse ? '' : 'inline') . ';">';
                         echo '<br>';
                     }
 
@@ -237,7 +229,7 @@ function dump_debug($input, $collapse=false) {
                     "<span style='color:#666622'>" . $type . ($typeLength !== null ? "(" . $typeLength . ")" : "") . "</span>&nbsp;&nbsp;";
             }
 
-        } elseif ('Object' == $type) {
+        } elseif ('Object' == $type || 'Callable' == $type && is_object($data)) {
             $notEmpty = false;
 
             $reflection = new ReflectionObject($data);
@@ -253,7 +245,7 @@ function dump_debug($input, $collapse=false) {
                     }elseif($property->isProtected()){
                         $protected = true;
                     }
-                    $value = $property->setAccessible(true);
+                    $property->setAccessible(true);
                     $value = $property->getValue($data);
                 } catch (Exception $e) {
                     die($e->getMessage());
@@ -300,6 +292,28 @@ function dump_debug($input, $collapse=false) {
                 if (!$isTerminal) {
                     echo "</div>";
                 }
+                if($level <= H_DEBUG_LEVEL) {
+                    $methods = array_map(function (ReflectionMethod $method){
+                        return [
+                            $method->getShortName(),
+                            ($method->isPublic()?'&nbsp;<span style="color: green">public&nbsp;</span>&nbsp;':'').
+                            ($method->isProtected()?'&nbsp;<span style="color: palevioletred">protected</span>&nbsp;':'').
+                            ($method->isPrivate()?'&nbsp;<span style="color: red">private</span>&nbsp;':'').
+                            $method->class.'::'.$method->name.'()'.
+                            ($method->isStatic()?'&nbsp;<span style="color: palevioletred">static</span>':'').
+                            ($method->isAbstract()?'&nbsp;<span style="color: palevioletred">(Abstract)</span>':'')
+                        ];
+                    },
+                        $reflection->getMethods()
+                    );
+                    echo moreInfo([
+                        'Methods' => array_combine(array_column($methods, 0), array_column($methods, 1)),
+                    ],
+                        $level+1,
+                        $isTerminal,
+                        $moreInfo=false
+                    );
+                }
 
             } else {
                 echo $isTerminal ?
@@ -308,9 +322,19 @@ function dump_debug($input, $collapse=false) {
             }
 
         } else {
+            $resourceInfo = '';
+            if ('Resource' == $type){
+                ob_start();
+                var_dump($data);
+                $resourceInfo = substr(ob_get_clean(), 8);
+                if ('stream' == get_resource_type($data)) {
+                    $resourceInfo = streaminfos(stream_get_meta_data($data), $resourceInfo, $level, $isTerminal);
+                }
+            }
+
             echo $isTerminal ?
                 $type . ($typeLength !== null ? "(" . $typeLength . ")" : "") . "  " :
-                "<span style='color:#666633'>" . $type . ($typeLength !== null ? "(" . $typeLength . ")" : "") . "</span>&nbsp;&nbsp;";
+                "<span style='color:#666633'>" . $type . ($typeLength !== null ? "(" . $typeLength . ")" : "") . " </span>$resourceInfo&nbsp;&nbsp;";
             if ($typeData != null) {
                 echo $isTerminal ? $typeData : "<span style='color:" . $typeColor . "'> ". $typeData ."</span>";
             }
@@ -322,3 +346,75 @@ function dump_debug($input, $collapse=false) {
     call_user_func($recursive, $input);
 }
 
+function streaminfos($data, $resourceInfo, $level, $isTerminal, $collapse=false)
+{
+    foreach ($data as $key => $value) {
+        $a = '';
+        if (!$isTerminal) {
+            $id = substr(md5(rand() . ":" . $key . ":" . $level), 0, 8);
+            $a = '<a href="javascript:toggleDisplay(\'' . $id . '\');" style="text-decoration:none">' .
+                '<span style="color:#666611">' . $resourceInfo . '</span>' .
+                '</a>' .
+                '<div id="container' . $id . '" style="display: ' . ($collapse ? '' : 'inline') . ';">';
+        }
+
+        $br = '';
+        foreach ($data as $key => $value) {
+            $a .= str_repeat($isTerminal ? '|    ' : '<span style="color:black">|</span>&nbsp;&nbsp;&nbsp;&nbsp;', $level);
+            $a .= '&nbsp;|&nbsp;&nbsp;';
+            $a .= $isTerminal ? $key . ': ' : $br . '<span style="color:black">' . $key . str_repeat('&nbsp;', 13 - strlen($key)) . ':&nbsp;' .
+                ($value === null ? 'NULL' : ($value === false ? 'FALSE' : ($value === true ? 'TRUE' : (is_string($value) ? '"' . $value . '"' : $value)))) .
+                '</span>';
+            $a .= '<br>';
+        }
+
+        $a .= '</div>';
+
+        return $a;
+    }
+}
+function moreInfo($data, $level, $isTerminal, $moreInfo=false, $collapse=true) {
+    if($level > H_DEBUG_METHODS_LEVEL){
+        return '';
+    }
+    foreach ($data as $key => $value) {
+        $a = '';
+        if (!$isTerminal) {
+            if(false === $moreInfo) {
+                $id = substr(md5(rand() . ":" . $key . ":" . $level), 0, 8);
+                $a = '<a href="javascript:toggleDisplay(\'' . $id . '\', \'block\');" style="text-decoration:none">' .
+                    '<span style="color:#666611">'.$key.'</span>'.
+                    '</a>' .
+                    '<div id="container' . $id . '" style="display: ' . ($collapse ? '' : 'block') . ';">';
+            } else {
+//                $a = '<div>######'.$moreInfo;
+            }
+        }
+
+        $br = '';
+        if(is_array($value)){
+            $maxL = max(array_map('strlen', array_keys($value))) + 1;
+            foreach ($value as $k => $v) {
+                $a .= str_repeat($isTerminal ? '|    ' : '<span style="color:black">|</span>&nbsp;&nbsp;&nbsp;&nbsp;', $level);
+                $a .= '|&nbsp;&nbsp;';
+                if(is_string($k)){
+                    $a .= $isTerminal ? $k . ': ' : $br.'<span style="color:black">' . $k. str_repeat('&nbsp;', $maxL - strlen($k)) . ':&nbsp;';
+                }
+                if (is_array($v)){
+                    $a .= moreInfo($v, $level+1, $isTerminal, $k, $collapse);
+                }else{
+                    $a .= $v === null ? 'NULL' : ($v === false ? 'FALSE' : ($v === true ? 'TRUE' : $v));
+                }
+
+                $a .= '</span>';
+                $a .= '<br>';
+            }
+        }else{
+            $a .= "<b>$value</b>";
+        }
+        $a .= '</div>';
+
+        return $a;
+    }
+
+}
